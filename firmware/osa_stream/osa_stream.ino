@@ -19,6 +19,12 @@
 
 #include <Arduino.h>
 #include <math.h>
+#include <driver/dac.h>
+
+// dacWrite() は呼ぶたびに dac_output_enable() もやり直すので遅い（1 点あたり約 38µs）。
+// 出力の有効化は setup() で 1 回だけ行い、描画中は電圧だけを書き換える。
+static inline void dacX(uint8_t v) { dac_output_voltage(DAC_CHANNEL_1, v); }   // GPIO25
+static inline void dacY(uint8_t v) { dac_output_voltage(DAC_CHANNEL_2, v); }   // GPIO26
 
 // ---- 調整用の設定 ----
 constexpr uint8_t  PIN_X = 25;
@@ -189,8 +195,8 @@ static void drawIdle() {
   // 行き（弧を描く）
   for (uint8_t i = 0; i < arc_pts; i++) {
     uint8_t idx = (offset + i) % IDLE_PTS;
-    dacWrite(PIN_X, g_idleX[idx]);
-    dacWrite(PIN_Y, g_idleY[idx]);
+    dacX(g_idleX[idx]);
+    dacY(g_idleY[idx]);
   }
   
   // 帰り（来た道を戻る）
@@ -198,8 +204,8 @@ static void drawIdle() {
   // なぞるように逆再生して戻します。
   for (int8_t i = arc_pts - 1; i >= 0; i--) {
     uint8_t idx = (offset + i) % IDLE_PTS;
-    dacWrite(PIN_X, g_idleX[idx]);
-    dacWrite(PIN_Y, g_idleY[idx]);
+    dacX(g_idleX[idx]);
+    dacY(g_idleY[idx]);
   }
 }
 
@@ -209,6 +215,8 @@ void setup() {
     g_idleX[i] = (uint8_t)lroundf(128.0f + 60.0f * cosf(a));
     g_idleY[i] = (uint8_t)lroundf(128.0f + 60.0f * sinf(a));
   }
+  dac_output_enable(DAC_CHANNEL_1);         // PIN_X（GPIO25）
+  dac_output_enable(DAC_CHANNEL_2);         // PIN_Y（GPIO26）
   Serial.setRxBufferSize(RX_BUFFER_BYTES);   // begin() より前に呼ぶこと
   Serial.begin(BAUD);
   Serial.setTimeout(50);
@@ -235,8 +243,8 @@ void loop() {
   if (have) {
     const uint8_t* xy = g_buf[idx];
     for (uint16_t i = 0; i < n; i++) {
-      dacWrite(PIN_X, xy[2 * i]);
-      dacWrite(PIN_Y, xy[2 * i + 1]);
+      dacX(xy[2 * i]);
+      dacY(xy[2 * i + 1]);
       if (POINT_DELAY_US) delayMicroseconds(POINT_DELAY_US);
     }
   } else {
